@@ -34,6 +34,26 @@
       margin-bottom: 2rem;
     }
 
+    .nav {
+      display: flex;
+      gap: 0.75rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .nav a {
+      color: #c4b5fd;
+      text-decoration: none;
+      font-size: 0.9rem;
+      border: 1px solid #312e81;
+      border-radius: 999px;
+      padding: 0.45rem 0.9rem;
+      background: rgba(76, 29, 149, 0.18);
+    }
+
+    .nav a:hover {
+      background: rgba(76, 29, 149, 0.32);
+    }
+
     .container {
       width: 100%;
       max-width: 900px;
@@ -254,6 +274,10 @@
 <body>
   <h1>Image Generator</h1>
   <p class="subtitle" id="subtitle">loading model info...</p>
+  <div class="nav">
+    <a href="/">Generate</a>
+    <a href="/finetune">LoRA Finetune</a>
+  </div>
 
   <div class="container">
     <!-- Controls -->

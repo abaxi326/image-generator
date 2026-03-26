@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Manual LoRA Finetuning</title>
+  <style>
+    * { box-sizing: border-box; }
+
+    :root {
+      --bg: #0d1117;
+      --panel: #161b22;
+      --panel-2: #1f2630;
+      --line: #2d3642;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --accent: #f59e0b;
+      --accent-2: #fb7185;
+      --ok: #10b981;
+      --bad: #ef4444;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at top left, rgba(245, 158, 11, 0.18), transparent 28%),
+        radial-gradient(circle at bottom right, rgba(251, 113, 133, 0.14), transparent 30%),
+        var(--bg);
+      color: var(--text);
+      font-family: "Segoe UI", sans-serif;
+      padding: 2rem 1rem 3rem;
+    }
+
+    .shell {
+      width: 100%;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 2rem;
+      letter-spacing: -0.03em;
+    }
+
+    .subtitle {
+      margin: 0.5rem 0 1.2rem;
+      color: var(--muted);
+    }
+
+    .nav {
+      display: flex;
+      gap: 0.75rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .nav a {
+      color: #fde68a;
+      text-decoration: none;
+      border: 1px solid #854d0e;
+      border-radius: 999px;
+      padding: 0.45rem 0.9rem;
+      background: rgba(133, 77, 14, 0.22);
+    }
+
+    .nav a:hover {
+      background: rgba(133, 77, 14, 0.35);
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 420px 1fr;
+      gap: 1.25rem;
+    }
+
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+    }
+
+    .panel {
+      background: linear-gradient(180deg, rgba(31, 38, 48, 0.96), rgba(22, 27, 34, 0.96));
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 1.1rem;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
+    }
+
+    .panel h2 {
+      margin: 0 0 1rem;
+      font-size: 1rem;
+      letter-spacing: 0.01em;
+    }
+
+    .grid {
+      display: grid;
+      gap: 0.9rem;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+    }
+
+    label {
+      display: grid;
+      gap: 0.35rem;
+      color: var(--muted);
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    input, textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #0b0f14;
+      color: var(--text);
+      padding: 0.75rem 0.8rem;
+      font: inherit;
+      outline: none;
+    }
+
+    input:focus, textarea:focus {
+      border-color: var(--accent);
+    }
+
+    textarea {
+      min-height: 96px;
+      resize: vertical;
+    }
+
+    .hint {
+      color: var(--muted);
+      font-size: 0.82rem;
+      line-height: 1.5;
+      margin-top: 0.3rem;
+    }
+
+    button {
+      width: 100%;
+      border: 0;
+      border-radius: 12px;
+      padding: 0.85rem 1rem;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: white;
+      font-size: 0.95rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    .status-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      border-radius: 999px;
+      padding: 0.45rem 0.8rem;
+      font-size: 0.84rem;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--line);
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--muted);
+    }
+
+    .dot.running { background: var(--accent); }
+    .dot.completed { background: var(--ok); }
+    .dot.failed { background: var(--bad); }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.75rem;
+      margin-top: 1rem;
+    }
+
+    .stat {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 0.9rem;
+      background: rgba(11, 15, 20, 0.75);
+    }
+
+    .stat b {
+      display: block;
+      font-size: 1rem;
+      margin-top: 0.25rem;
+    }
+
+    pre {
+      margin: 1rem 0 0;
+      padding: 1rem;
+      min-height: 420px;
+      border-radius: 14px;
+      background: #05080c;
+      border: 1px solid #1f2937;
+      color: #d1d5db;
+      font-size: 0.86rem;
+      line-height: 1.5;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .error {
+      margin-top: 0.9rem;
+      color: #fecaca;
+      background: rgba(127, 29, 29, 0.35);
+      border: 1px solid rgba(220, 38, 38, 0.45);
+      border-radius: 10px;
+      padding: 0.8rem;
+      display: none;
+    }
+
+    .error.visible { display: block; }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <h1>Manual LoRA Finetuning</h1>
+    <p class="subtitle">Pure PyTorch training with manual LoRA layer injection into the UNet. No PEFT wrapper, no extra orchestration.</p>
+
+    <div class="nav">
+      <a href="/">Generate</a>
+      <a href="/finetune">LoRA Finetune</a>
+    </div>
+
+    <div class="layout">
+      <section class="panel">
+        <h2>Training Job</h2>
+        <div class="grid">
+          <label>
+            Pretrained Model Path
+            <input id="pretrained_model_path" value="models/sdxl-base-1.0" />
+          </label>
+
+          <label>
+            Train Data Dir
+            <input id="train_data_dir" placeholder="datasets/my-lora-set" />
+          </label>
+
+          <label>
+            Output Path
+            <input id="output_path" value="outputs/sdxl_lora_manual.pt" />
+          </label>
+
+          <div class="row">
+            <label>
+              Resolution
+              <input id="resolution" type="number" value="1024" min="256" max="2048" step="64" />
+            </label>
+            <label>
+              Batch Size
+              <input id="batch_size" type="number" value="1" min="1" max="16" />
+            </label>
+          </div>
+
+          <div class="row">
+            <label>
+              Epochs
+              <input id="epochs" type="number" value="1" min="1" max="100" />
+            </label>
+            <label>
+              LR
+              <input id="lr" type="number" value="0.0001" min="0.000001" max="1" step="0.000001" />
+            </label>
+          </div>
+
+          <div class="row">
+            <label>
+              Rank
+              <input id="rank" type="number" value="4" min="1" max="256" />
+            </label>
+            <label>
+              Alpha
+              <input id="alpha" type="number" value="4" min="0.1" max="1024" step="0.1" />
+            </label>
+          </div>
+
+          <div class="row">
+            <label>
+              Device
+              <input id="device" value="cuda" />
+            </label>
+            <label>
+              Log Every
+              <input id="log_every" type="number" value="10" min="1" max="10000" />
+            </label>
+          </div>
+
+          <button id="startBtn" onclick="startTraining()">Start LoRA Finetuning</button>
+          <div class="hint">Dataset format: put images in the training folder and optional matching caption text files beside them, like `image_01.png` and `image_01.txt`.</div>
+          <div id="errorBox" class="error"></div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Run Status</h2>
+        <div class="status-chip">
+          <span id="statusDot" class="dot"></span>
+          <span id="statusText">idle</span>
+        </div>
+
+        <div class="stats">
+          <div class="stat">Started<b id="startedAt">-</b></div>
+          <div class="stat">Finished<b id="finishedAt">-</b></div>
+          <div class="stat">Output<b id="outputPath">-</b></div>
+          <div class="stat">Device<b id="deviceUsed">-</b></div>
+        </div>
+
+        <pre id="logBox">Waiting for training logs...</pre>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    let pollHandle = null;
+
+    function getBody() {
+      return {
+        pretrained_model_path: document.getElementById('pretrained_model_path').value.trim(),
+        train_data_dir: document.getElementById('train_data_dir').value.trim(),
+        output_path: document.getElementById('output_path').value.trim(),
+        resolution: parseInt(document.getElementById('resolution').value, 10),
+        batch_size: parseInt(document.getElementById('batch_size').value, 10),
+        epochs: parseInt(document.getElementById('epochs').value, 10),
+        lr: parseFloat(document.getElementById('lr').value),
+        rank: parseInt(document.getElementById('rank').value, 10),
+        alpha: parseFloat(document.getElementById('alpha').value),
+        device: document.getElementById('device').value.trim(),
+        log_every: parseInt(document.getElementById('log_every').value, 10),
+      };
+    }
+
+    async function startTraining() {
+      hideError();
+      const body = getBody();
+      if (!body.train_data_dir) {
+        showError('Please enter a training data directory.');
+        return;
+      }
+
+      const btn = document.getElementById('startBtn');
+      btn.disabled = true;
+      btn.textContent = 'Starting...';
+
+      try {
+        const res = await fetch('/train-lora/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ detail: 'Unable to start training' }));
+          throw new Error(err.detail || 'Unable to start training');
+        }
+
+        await refreshStatus();
+      } catch (error) {
+        showError(error.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Start LoRA Finetuning';
+      }
+    }
+
+    async function refreshStatus() {
+      const res = await fetch('/train-lora/status');
+      const data = await res.json();
+      renderStatus(data);
+    }
+
+    function renderStatus(data) {
+      const status = data.status || 'idle';
+      document.getElementById('statusText').textContent = status;
+
+      const dot = document.getElementById('statusDot');
+      dot.className = 'dot';
+      if (status === 'running' || data.running) dot.classList.add('running');
+      if (status === 'completed') dot.classList.add('completed');
+      if (status === 'failed') dot.classList.add('failed');
+
+      document.getElementById('startedAt').textContent = formatTime(data.started_at);
+      document.getElementById('finishedAt').textContent = formatTime(data.finished_at);
+      document.getElementById('outputPath').textContent = data.config?.output_path || '-';
+      document.getElementById('deviceUsed').textContent = data.config?.device || '-';
+
+      const logs = (data.logs || []).join('\n');
+      document.getElementById('logBox').textContent = logs || 'Waiting for training logs...';
+
+      if (data.error) {
+        showError(data.error);
+      } else {
+        hideError();
+      }
+    }
+
+    function formatTime(value) {
+      if (!value) return '-';
+      return new Date(value * 1000).toLocaleString();
+    }
+
+    function showError(message) {
+      const el = document.getElementById('errorBox');
+      el.textContent = message;
+      el.classList.add('visible');
+    }
+
+    function hideError() {
+      document.getElementById('errorBox').classList.remove('visible');
+    }
+
+    refreshStatus();
+    pollHandle = setInterval(refreshStatus, 2000);
+    window.addEventListener('beforeunload', () => clearInterval(pollHandle));
+  </script>
+</body>
+</html>
